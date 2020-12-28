@@ -15,14 +15,15 @@ static const char col_gray2[]       = "#3A3A3A";
 static const char col_gray3[]       = "#f9f5d7";
 static const char col_gray4[]       = "#eeeeee";
 static const char col_cyan[]        = "#458588";
+static const char col_orange1[]     = "#FE8019";
 
 static const char *colors[SchemeLast][2] = {
 	/*     fg         bg       */
-	[SchemeNorm] = { col_gray3, col_gray1 },
-	[SchemeSel] = { col_gray4, col_cyan },
+	[SchemeNorm] = { col_gray4, col_gray1 },
+	[SchemeSel] = { col_gray1, col_cyan },
 	[SchemeOut] = { "#000000", "#00ffff" },
-	[SchemeSelHighlight] = { "#ffc978", col_cyan },
-	[SchemeNormHighlight] = { "#ffc978", "#222222" },
+	[SchemeSelHighlight] = { col_gray3, col_cyan },
+	[SchemeNormHighlight] = { col_orange1, col_gray1 },
 };
 /* -l option; if nonzero, dmenu uses vertical list with given number of lines */
 static unsigned int lines      = 0;
