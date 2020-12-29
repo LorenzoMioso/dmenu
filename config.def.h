@@ -21,7 +21,7 @@ static const char *colors[SchemeLast][2] = {
 	/*     fg         bg       */
 	[SchemeNorm] = { col_gray4, col_gray1 },
 	[SchemeSel] = { col_gray1, col_cyan },
-	[SchemeOut] = { "#000000", "#00ffff" },
+	[SchemeOut] = { col_gray1, col_cyan },
 	[SchemeSelHighlight] = { col_gray3, col_cyan },
 	[SchemeNormHighlight] = { col_orange1, col_gray1 },
 };
