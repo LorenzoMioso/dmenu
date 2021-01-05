@@ -4,10 +4,7 @@
 static int topbar = 0;                      /* -b  option; if 0, dmenu appears at bottom     */
 static int fuzzy = 1;                      /* -F  option; if 0, dmenu doesn't use fuzzy matching     */
 /* -fn option overrides fonts[0]; default X11 font or font set */
-static const char *fonts[] = {
-    "Hack Nerd Font:size=10",
-	"monospace:size=10"
-};
+static const char *fonts[]          = { "monospace:pixelsize=14:antialias=true:autohint=true" };
 static const char *prompt      = NULL;      /* -p  option; prompt to the left of input field */
 
 static const char col_gray1[]       = "#282828";
