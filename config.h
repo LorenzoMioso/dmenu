@@ -3,7 +3,7 @@
 
 static int topbar = 0;                      /* -b  option; if 0, dmenu appears at bottom */
 #if ALPHA_PATCH
-static double opacity = 1.0;                /* -o  option; defines alpha translucency */
+static double opacity = 1;                /* -o  option; defines alpha translucency */
 #endif // ALPHA_PATCH
 #if FUZZYMATCH_PATCH
 static int fuzzy = 1;                       /* -F  option; if 0, dmenu doesn't use fuzzy matching */
@@ -48,8 +48,8 @@ static const char *symbol_2 = ">";
 #endif // SYMBOLS_PATCH
 
 #if ALPHA_PATCH
-/* static const unsigned int baralpha = 0xd0; */
-static const unsigned int baralpha = OPAQUE;
+static const unsigned int baralpha = 0xd0;
+/* static const unsigned int baralpha = OPAQUE; */
 static const unsigned int borderalpha = OPAQUE;
 static const unsigned int alphas[][3]      = {
 	/*               fg      bg        border     */
@@ -80,7 +80,7 @@ static const char *colors[][2] =
 	#endif // HIGHPRIORITY_PATCH
 };
 /* -l option; if nonzero, dmenu uses vertical list with given number of lines */
-static unsigned int lines      = 0;
+static unsigned int lines      = 20;
 #if GRID_PATCH
 /* -g option; if nonzero, dmenu uses a grid comprised of columns and lines */
 static unsigned int columns    = 0;
