@@ -48,7 +48,7 @@ static const char *symbol_2 = ">";
 #endif // SYMBOLS_PATCH
 
 #if ALPHA_PATCH
-static const unsigned int baralpha = 0xd0;
+static const unsigned int baralpha = 0xa0;
 /* static const unsigned int baralpha = OPAQUE; */
 static const unsigned int borderalpha = OPAQUE;
 static const unsigned int alphas[][3]      = {
