@@ -59,6 +59,9 @@ enum {
 	SchemeNorm,
 	SchemeSel,
 	SchemeOut,
+	#if BORDER_PATCH
+	SchemeBorder,
+	#endif // BORDER_PATCH
 	#if MORECOLOR_PATCH
 	SchemeMid,
 	#endif // MORECOLOR_PATCH
@@ -69,6 +72,14 @@ enum {
 	#if HIGHPRIORITY_PATCH
 	SchemeHp,
 	#endif // HIGHPRIORITY_PATCH
+	#if EMOJI_HIGHLIGHT_PATCH
+	SchemeHover,
+	SchemeGreen,
+	SchemeYellow,
+	SchemeBlue,
+	SchemePurple,
+	SchemeRed,
+	#endif // EMOJI_HIGHLIGHT_PATCH
 	SchemeLast,
 }; /* color schemes */
 
@@ -115,6 +126,10 @@ static int inputw = 0, promptw;
 static int passwd = 0;
 #endif // PASSWORD_PATCH
 static int lrpad; /* sum of left and right padding */
+#if BARPADDING_PATCH
+static int vp; /* vertical padding for bar */
+static int sp; /* side padding for bar */
+#endif // BARPADDING_PATCH
 #if REJECTNOMATCH_PATCH
 static int reject_no_match = 0;
 #endif // REJECTNOMATCH_PATCH
@@ -142,6 +157,10 @@ static int use_text_input = 0;
 #if PRESELECT_PATCH
 static unsigned int preselected = 0;
 #endif // PRESELECT_PATCH
+#if EMOJI_HIGHLIGHT_PATCH
+static int commented = 0;
+static int animated = 0;
+#endif // EMOJI_HIGHLIGHT_PATCH
 
 static Atom clip, utf8;
 #if WMTYPE_PATCH
@@ -173,6 +192,13 @@ static char *(*fstrstr)(const char *, const char *) = cistrstr;
 static int (*fstrncmp)(const char *, const char *, size_t) = strncmp;
 static char *(*fstrstr)(const char *, const char *) = strstr;
 #endif // CASEINSENSITIVE_PATCH
+
+static unsigned int
+textw_clamp(const char *str, unsigned int n)
+{
+	unsigned int w = drw_fontset_getwidth_clamp(drw, str, n) + lrpad;
+	return MIN(w, n);
+}
 
 static void appenditem(struct item *item, struct item **list, struct item **last);
 static void calcoffsets(void);
@@ -214,9 +240,9 @@ appenditem(struct item *item, struct item **list, struct item **last)
 static void
 calcoffsets(void)
 {
-	int i, n;
+	int i, n, rpad = 0;
 
-	if (lines > 0)
+	if (lines > 0) {
 		#if GRID_PATCH
 		if (columns)
 			n = lines * columns * bh;
@@ -225,26 +251,22 @@ calcoffsets(void)
 		#else
 		n = lines * bh;
 		#endif // GRID_PATCH
-	else
+	} else {
+		#if NUMBERS_PATCH
+		rpad = TEXTW(numbers);
+		#endif // NUMBERS_PATCH
 		#if SYMBOLS_PATCH
-		n = mw - (promptw + inputw + TEXTW(symbol_1) + TEXTW(symbol_2));
+		n = mw - (promptw + inputw + TEXTW(symbol_1) + TEXTW(symbol_2) + rpad);
 		#else
-		n = mw - (promptw + inputw + TEXTW("<") + TEXTW(">"));
+		n = mw - (promptw + inputw + TEXTW("<") + TEXTW(">") + rpad);
 		#endif // SYMBOLS_PATCH
+	}
 	/* calculate which items will begin the next page and previous page */
 	for (i = 0, next = curr; next; next = next->right)
-		#if PANGO_PATCH
-		if ((i += (lines > 0) ? bh : MIN(TEXTWM(next->text), n)) > n)
-		#else
-		if ((i += (lines > 0) ? bh : MIN(TEXTW(next->text), n)) > n)
-		#endif // PANGO_PATCH
+		if ((i += (lines > 0) ? bh : textw_clamp(next->text, n)) > n)
 			break;
 	for (i = 0, prev = curr; prev && prev->left; prev = prev->left)
-		#if PANGO_PATCH
-		if ((i += (lines > 0) ? bh : MIN(TEXTWM(prev->left->text), n)) > n)
-		#else
-		if ((i += (lines > 0) ? bh : MIN(TEXTW(prev->left->text), n)) > n)
-		#endif // PANGO_PATCH
+		if ((i += (lines > 0) ? bh : textw_clamp(prev->left->text, n)) > n)
 			break;
 }
 
@@ -256,6 +278,14 @@ cleanup(void)
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	for (i = 0; i < SchemeLast; i++)
 		free(scheme[i]);
+	for (i = 0; items && items[i].text; ++i)
+		free(items[i].text);
+	free(items);
+	#if HIGHPRIORITY_PATCH
+	for (i = 0; i < hplength; ++i)
+		free(hpitems[i]);
+	free(hpitems);
+	#endif // HIGHPRIORITY_PATCH
 	drw_free(drw);
 	XSync(dpy, False);
 	XCloseDisplay(dpy);
@@ -279,6 +309,131 @@ static int
 drawitem(struct item *item, int x, int y, int w)
 {
 	int r;
+	#if TSV_PATCH
+	char *text = item->stext;
+	#else
+	char *text = item->text;
+	#endif // TSV_PATCH
+
+	#if EMOJI_HIGHLIGHT_PATCH
+	int iscomment = 0;
+	if (text[0] == '>') {
+		if (text[1] == '>') {
+			iscomment = 3;
+			switch (text[2]) {
+			case 'r':
+				drw_setscheme(drw, scheme[SchemeRed]);
+				break;
+			case 'g':
+				drw_setscheme(drw, scheme[SchemeGreen]);
+				break;
+			case 'y':
+				drw_setscheme(drw, scheme[SchemeYellow]);
+				break;
+			case 'b':
+				drw_setscheme(drw, scheme[SchemeBlue]);
+				break;
+			case 'p':
+				drw_setscheme(drw, scheme[SchemePurple]);
+				break;
+			#if HIGHLIGHT_PATCH || FUZZYHIGHLIGHT_PATCH
+			case 'h':
+				drw_setscheme(drw, scheme[SchemeNormHighlight]);
+				break;
+			#endif // HIGHLIGHT_PATCH | FUZZYHIGHLIGHT_PATCH
+			case 's':
+				drw_setscheme(drw, scheme[SchemeSel]);
+				break;
+			default:
+				iscomment = 1;
+				drw_setscheme(drw, scheme[SchemeNorm]);
+			break;
+			}
+		} else {
+			drw_setscheme(drw, scheme[SchemeNorm]);
+			iscomment = 1;
+		}
+	} else if (text[0] == ':') {
+		iscomment = 2;
+		if (item == sel) {
+			switch (text[1]) {
+			case 'r':
+				drw_setscheme(drw, scheme[SchemeRed]);
+				break;
+			case 'g':
+				drw_setscheme(drw, scheme[SchemeGreen]);
+				break;
+			case 'y':
+				drw_setscheme(drw, scheme[SchemeYellow]);
+				break;
+			case 'b':
+				drw_setscheme(drw, scheme[SchemeBlue]);
+				break;
+			case 'p':
+				drw_setscheme(drw, scheme[SchemePurple]);
+				break;
+			#if HIGHLIGHT_PATCH || FUZZYHIGHLIGHT_PATCH
+			case 'h':
+				drw_setscheme(drw, scheme[SchemeNormHighlight]);
+				break;
+			#endif // HIGHLIGHT_PATCH | FUZZYHIGHLIGHT_PATCH
+			case 's':
+				drw_setscheme(drw, scheme[SchemeSel]);
+				break;
+			default:
+				drw_setscheme(drw, scheme[SchemeSel]);
+				iscomment = 0;
+				break;
+			}
+		} else {
+			drw_setscheme(drw, scheme[SchemeNorm]);
+		}
+	}
+	#endif // EMOJI_HIGHLIGHT_PATCH
+
+	#if EMOJI_HIGHLIGHT_PATCH
+	int temppadding = 0;
+	if (iscomment == 2) {
+		if (text[2] == ' ') {
+			#if PANGO_PATCH
+			temppadding = drw->font->h * 3;
+			#else
+			temppadding = drw->fonts->h * 3;
+			#endif // PANGO_PATCH
+			animated = 1;
+			char dest[1000];
+			strcpy(dest, text);
+			dest[6] = '\0';
+			drw_text(drw, x, y
+				, temppadding
+				#if LINE_HEIGHT_PATCH
+				, MAX(lineheight, bh)
+				#else
+				, bh
+				#endif // LINE_HEIGHT_PATCH
+				, temppadding / 2.6
+				, dest + 3
+				, 0
+				#if PANGO_PATCH
+				, True
+				#endif // PANGO_PATCH
+			);
+			iscomment = 6;
+			drw_setscheme(drw, sel == item ? scheme[SchemeHover] : scheme[SchemeNorm]);
+		}
+	}
+
+	char *output;
+	if (commented) {
+		static char onestr[2];
+		onestr[0] = text[0];
+		onestr[1] = '\0';
+		output = onestr;
+	} else {
+		output = text;
+	}
+	#endif // EMOJI_HIGHLIGHT_PATCH
+
 	if (item == sel)
 		drw_setscheme(drw, scheme[SchemeSel]);
 	#if HIGHPRIORITY_PATCH
@@ -298,23 +453,36 @@ drawitem(struct item *item, int x, int y, int w)
 	else
 		drw_setscheme(drw, scheme[SchemeNorm]);
 
-	r = drw_text(drw, x, y, w, bh, lrpad / 2
-		#if TSV_PATCH
-		, item->stext
+	r = drw_text(drw
+		#if EMOJI_HIGHLIGHT_PATCH
+		, x + ((iscomment == 6) ? temppadding : 0)
 		#else
-		, item->text
-		#endif // TSV_PATCH
+		, x
+		#endif // EMOJI_HIGHLIGHT_PATCH
+		, y
+		, w
+		, bh
+		#if EMOJI_HIGHLIGHT_PATCH
+		, commented ? (bh - TEXTW(output) - lrpad) / 2 : lrpad / 2
+		#else
+		, lrpad / 2
+		#endif // EMOJI_HIGHLIGHT_PATCH
+		#if EMOJI_HIGHLIGHT_PATCH
+		, output + iscomment
+		#else
+		, text
+		#endif // EMOJI_HIGHLIGHT_PATCH
 		, 0
 		#if PANGO_PATCH
 		, True
 		#endif // PANGO_PATCH
 		);
-	#if PANGO_PATCH
-	#else
-	r = drw_text(drw, x, y, w, bh, lrpad / 2, item->text, 0);
-	#endif // PANGO_PATCH
 	#if HIGHLIGHT_PATCH || FUZZYHIGHLIGHT_PATCH
+	#if EMOJI_HIGHLIGHT_PATCH
+	drawhighlights(item, output + iscomment, x + ((iscomment == 6) ? temppadding : 0), y, w);
+	#else
 	drawhighlights(item, x, y, w);
+	#endif // EMOJI_HIGHLIGHT_PATCH
 	#endif // HIGHLIGHT_PATCH | FUZZYHIGHLIGHT_PATCH
 	return r;
 }
@@ -346,11 +514,11 @@ drawmenu(void)
 		#if !PLAIN_PROMPT_PATCH
 		drw_setscheme(drw, scheme[SchemeSel]);
 		#endif // PLAIN_PROMPT_PATCH
-		#if PANGO_PATCH
-		x = drw_text(drw, x, 0, promptw, bh, lrpad / 2, prompt, 0, True);
-		#else
-		x = drw_text(drw, x, 0, promptw, bh, lrpad / 2, prompt, 0);
-		#endif // PANGO_PATCH
+		x = drw_text(drw, x, 0, promptw, bh, lrpad / 2, prompt, 0
+			#if PANGO_PATCH
+			, True
+			#endif // PANGO_PATCH
+		);
 	}
 	/* draw input field */
 	w = (lines > 0 || !matches) ? mw - x : inputw;
@@ -358,8 +526,8 @@ drawmenu(void)
 	#if SCROLL_PATCH
 	w -= lrpad / 2;
 	x += lrpad / 2;
-	rcurlen = drw_fontset_getwidth(drw, text + cursor);
-	curlen = drw_fontset_getwidth(drw, text) - rcurlen;
+	rcurlen = TEXTW(text + cursor) - lrpad;
+	curlen = TEXTW(text) - lrpad - rcurlen;
 	curpos += curlen - oldcurlen;
 	curpos = MIN(w, MAX(0, curpos));
 	curpos = MAX(curpos, w - rcurlen);
@@ -393,22 +561,29 @@ drawmenu(void)
 	if (passwd) {
 		censort = ecalloc(1, sizeof(text));
 		memset(censort, '.', strlen(text));
-		#if PANGO_PATCH
-		drw_text(drw, x, 0, w, bh, lrpad / 2, censort, 0, False);
-		#else
-		drw_text(drw, x, 0, w, bh, lrpad / 2, censort, 0);
-		#endif // PANGO_PATCH
+		drw_text(drw, x, 0, w, bh, lrpad / 2, censort, 0
+			#if PANGO_PATCH
+			, False
+			#endif // PANGO_PATCH
+		);
+		drw_text(drw, x, 0, w, bh, lrpad / 2, censort, 0
+			#if PANGO_PATCH
+			, False
+			#endif // PANGO_PATCH
+		);
 		free(censort);
 	} else
-		#if PANGO_PATCH
-		drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0, False);
-		#else
-		drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
-		#endif // PANGO_PATCH
-	#elif PANGO_PATCH
-	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0, False);
+		drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0
+			#if PANGO_PATCH
+			, False
+			#endif // PANGO_PATCH
+		);
 	#else
-	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
+	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0
+		#if PANGO_PATCH
+		, False
+		#endif // PANGO_PATCH
+	);
 	#endif // PASSWORD_PATCH
 
 	curpos = TEXTW(text) - TEXTW(&text[cursor]);
@@ -425,6 +600,12 @@ drawmenu(void)
 	#if NUMBERS_PATCH
 	recalculatenumbers();
 	rpad = TEXTW(numbers);
+	#if BARPADDING_PATCH
+	rpad += 2 * sp;
+	#endif // BARPADDING_PATCH
+	#if BORDER_PATCH
+	rpad += border_width;
+	#endif // BORDER_PATCH
 	#endif // NUMBERS_PATCH
 	if (lines > 0) {
 		#if GRID_PATCH
@@ -468,29 +649,25 @@ drawmenu(void)
 		w = TEXTW("<");
 		if (curr->left) {
 			drw_setscheme(drw, scheme[SchemeNorm]);
-			#if PANGO_PATCH
-			drw_text(drw, x, 0, w, bh, lrpad / 2, "<", 0, True);
-			#else
-			drw_text(drw, x, 0, w, bh, lrpad / 2, "<", 0);
-			#endif // PANGO_PATCH
+			drw_text(drw, x, 0, w, bh, lrpad / 2, "<", 0
+				#if PANGO_PATCH
+				, True
+				#endif // PANGO_PATCH
+			);
 		}
 		x += w;
 		for (item = curr; item != next; item = item->right) {
-			#if PANGO_PATCH && TSV_PATCH
-			itw = TEXTWM(item->stext);
-			#elif PANGO_PATCH
-			itw = TEXTWM(item->text);
-			#elif TSV_PATCH
-			itw = TEXTW(item->stext);
-			#else
-			itw = TEXTW(item->text);
-			#endif // PANGO_PATCH | TSV_PATCH
 			#if SYMBOLS_PATCH
 			stw = TEXTW(symbol_2);
 			#else
 			stw = TEXTW(">");
 			#endif // SYMBOLS_PATCH
-			x = drawitem(item, x, 0, MIN(itw, mw - x - stw - rpad));
+			#if TSV_PATCH
+			itw = textw_clamp(item->stext, mw - x - stw - rpad);
+			#else
+			itw = textw_clamp(item->text, mw - x - stw - rpad);
+			#endif // PANGO_PATCH | TSV_PATCH
+			x = drawitem(item, x, 0, itw);
 		}
 		if (next) {
 			#if SYMBOLS_PATCH
@@ -499,21 +676,22 @@ drawmenu(void)
 			w = TEXTW(">");
 			#endif // SYMBOLS_PATCH
 			drw_setscheme(drw, scheme[SchemeNorm]);
-			#if PANGO_PATCH && SYMBOLS_PATCH
-			drw_text(drw, mw - w - rpad, 0, w, bh, lrpad / 2, symbol_2, 0, True);
-			#elif PANGO_PATCH
-			drw_text(drw, mw - w - rpad, 0, w, bh, lrpad / 2, ">", 0, True);
-			#elif SYMBOLS_PATCH
-			drw_text(drw, mw - w, 0, w, bh, lrpad / 2, symbol_2, 0);
-			#else
-			drw_text(drw, mw - w - rpad, 0, w, bh, lrpad / 2, ">", 0);
-			#endif // PANGO_PATCH
+			drw_text(drw, mw - w - rpad, 0, w, bh, lrpad / 2
+				#if SYMBOLS_PATCH
+				, symbol_2
+				#else
+				, ">"
+				#endif // SYMBOLS_PATCH
+				, 0
+				#if PANGO_PATCH
+				, True
+				#endif // PANGO_PATCH
+			);
 		}
 	}
 	#if NUMBERS_PATCH
 	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_text(drw, mw - TEXTW(numbers), 0, TEXTW(numbers), bh, lrpad / 2, numbers, 0);
-	#else
+	drw_text(drw, mw - rpad, 0, TEXTW(numbers), bh, lrpad / 2, numbers, 0);
 	#endif // NUMBERS_PATCH
 	drw_map(drw, win, 0, 0, mw, mh);
 	#if NON_BLOCKING_STDIN_PATCH
@@ -598,7 +776,7 @@ match(void)
 	/* separate input text into tokens to be matched individually */
 	for (s = strtok(buf, " "); s; tokv[tokc - 1] = s, s = strtok(NULL, " "))
 		if (++tokc > tokn && !(tokv = realloc(tokv, ++tokn * sizeof *tokv)))
-			die("cannot realloc %u bytes:", tokn * sizeof *tokv);
+			die("cannot realloc %zu bytes:", tokn * sizeof *tokv);
 	len = tokc ? strlen(tokv[0]) : 0;
 
 	#if PREFIXCOMPLETION_PATCH
@@ -828,17 +1006,27 @@ keypress(XKeyEvent *ev)
 			break;
 		case XK_y: /* paste selection */
 		case XK_Y:
+		#if CTRL_V_TO_PASTE_PATCH
+		case XK_v:
+		case XK_V:
+		#endif // CTRL_V_TO_PASTE_PATCH
 			XConvertSelection(dpy, (ev->state & ShiftMask) ? clip : XA_PRIMARY,
 			                  utf8, utf8, win, CurrentTime);
 			return;
 		case XK_Left:
+		case XK_KP_Left:
 			movewordedge(-1);
 			goto draw;
 		case XK_Right:
+		case XK_KP_Right:
 			movewordedge(+1);
 			goto draw;
 		case XK_Return:
 		case XK_KP_Enter:
+			#if RESTRICT_RETURN_PATCH
+			if (restrict_return)
+				break;
+			#endif // RESTRICT_RETURN_PATCH
 			#if MULTI_SELECTION_PATCH
 			selsel();
 			#endif // MULTI_SELECTION_PATCH
@@ -864,8 +1052,14 @@ keypress(XKeyEvent *ev)
 		case XK_k: ksym = XK_Prior; break;
 		case XK_l: ksym = XK_Down;  break;
 		#if NAVHISTORY_PATCH
-		case XK_p: navhistory(-1); buf[0]=0; break;
-		case XK_n: navhistory(1); buf[0]=0; break;
+		case XK_p:
+			navhistory(-1);
+			buf[0]=0;
+			break;
+		case XK_n:
+			navhistory(1);
+			buf[0]=0;
+			break;
 		#endif // NAVHISTORY_PATCH
 		default:
 			return;
@@ -875,10 +1069,11 @@ keypress(XKeyEvent *ev)
 	switch(ksym) {
 	default:
 insert:
-		if (!iscntrl(*buf))
+		if (!iscntrl((unsigned char)*buf))
 			insert(buf, len);
 		break;
 	case XK_Delete:
+	case XK_KP_Delete:
 		if (text[cursor] == '\0')
 			return;
 		cursor = nextrune(+1);
@@ -889,6 +1084,7 @@ insert:
 		insert(NULL, nextrune(-1) - cursor);
 		break;
 	case XK_End:
+	case XK_KP_End:
 		if (text[cursor] != '\0') {
 			cursor = strlen(text);
 			break;
@@ -908,6 +1104,7 @@ insert:
 		cleanup();
 		exit(1);
 	case XK_Home:
+	case XK_KP_Home:
 		if (sel == matches) {
 			cursor = 0;
 			break;
@@ -916,6 +1113,7 @@ insert:
 		calcoffsets();
 		break;
 	case XK_Left:
+	case XK_KP_Left:
 		#if GRID_PATCH && GRIDNAV_PATCH
 		if (columns > 1) {
 			if (!sel)
@@ -944,18 +1142,21 @@ insert:
 			return;
 		/* fallthrough */
 	case XK_Up:
+	case XK_KP_Up:
 		if (sel && sel->left && (sel = sel->left)->right == curr) {
 			curr = prev;
 			calcoffsets();
 		}
 		break;
 	case XK_Next:
+	case XK_KP_Next:
 		if (!next)
 			return;
 		sel = curr = next;
 		calcoffsets();
 		break;
 	case XK_Prior:
+	case XK_KP_Prior:
 		if (!prev)
 			return;
 		sel = curr = prev;
@@ -1033,6 +1234,7 @@ insert:
 		#endif // MULTI_SELECTION_PATCH
 		break;
 	case XK_Right:
+	case XK_KP_Right:
 		#if GRID_PATCH && GRIDNAV_PATCH
 		if (columns > 1) {
 			if (!sel)
@@ -1061,6 +1263,7 @@ insert:
 			return;
 		/* fallthrough */
 	case XK_Down:
+	case XK_KP_Down:
 		if (sel && sel->right && (sel = sel->right) == next) {
 			curr = next;
 			calcoffsets();
@@ -1068,7 +1271,14 @@ insert:
 		break;
 	case XK_Tab:
 		#if PREFIXCOMPLETION_PATCH
-		if (!matches) break; /* cannot complete no matches */
+		if (!matches)
+			break; /* cannot complete no matches */
+		#if FUZZYMATCH_PATCH
+		/* only do tab completion if all matches start with prefix */
+		for (item = matches; item && item->text; item = item->right)
+			if (item->text[0] != text[0])
+				goto draw;
+		#endif // FUZZYMATCH_PATCH
 		strncpy(text, matches->text, sizeof text - 1);
 		text[sizeof text - 1] = '\0';
 		len = cursor = strlen(text); /* length of longest common prefix */
@@ -1149,7 +1359,7 @@ xinitvisual()
 
 	XFree(infos);
 
-	if (! visual) {
+	if (!visual || !opacity) {
 		visual = DefaultVisual(dpy, screen);
 		depth = DefaultDepth(dpy, screen);
 		cmap = DefaultColormap(dpy, screen);
@@ -1164,12 +1374,10 @@ readstdin(void)
 	char buf[sizeof text], *p;
 	#if JSON_PATCH
 	size_t i;
-	unsigned int imax = 0;
 	struct item *item;
 	#else
-	size_t i, imax = 0, size = 0;
+	size_t i, size = 0;
 	#endif // JSON_PATCH
-	unsigned int tmpmax = 0;
 
 	#if PASSWORD_PATCH
 	if (passwd) {
@@ -1185,7 +1393,7 @@ readstdin(void)
 		#else
 		if (i + 1 >= size / sizeof *items)
 			if (!(items = realloc(items, (size += BUFSIZ))))
-				die("cannot realloc %u bytes:", size);
+				die("cannot realloc %zu bytes:", size);
 		#endif // JSON_PATCH
 		if ((p = strchr(buf, '\n')))
 			*p = '\0';
@@ -1194,12 +1402,12 @@ readstdin(void)
 		#else
 		if (!(items[i].text = strdup(buf)))
 		#endif // JSON_PATCH
-			die("cannot strdup %u bytes:", strlen(buf) + 1);
+			die("cannot strdup %zu bytes:", strlen(buf) + 1);
 		#if TSV_PATCH
 		if ((p = strchr(buf, '\t')))
 			*p = '\0';
 		if (!(items[i].stext = strdup(buf)))
-			die("cannot strdup %u bytes:", strlen(buf) + 1);
+			die("cannot strdup %zu bytes:", strlen(buf) + 1);
 		#endif // TSV_PATCH
 		#if MULTI_SELECTION_PATCH
 		items[i].id = i; /* for multiselect */
@@ -1221,19 +1429,6 @@ readstdin(void)
 		#if HIGHPRIORITY_PATCH
 		items[i].hp = arrayhas(hpitems, hplength, items[i].text);
 		#endif // HIGHPRIORITY_PATCH
-		#if PANGO_PATCH
-		drw_font_getexts(drw->font, buf, strlen(buf), &tmpmax, NULL, True);
-		#else
-		drw_font_getexts(drw->fonts, buf, strlen(buf), &tmpmax, NULL);
-		#endif // PANGO_PATCH
-		if (tmpmax > inputw) {
-			inputw = tmpmax;
-			#if JSON_PATCH
-			imax = items_ln - 1;
-			#else
-			imax = i;
-			#endif // JSON_PATCH
-		}
 	}
 	if (items)
 		#if JSON_PATCH
@@ -1241,11 +1436,6 @@ readstdin(void)
 		#else
 		items[i].text = NULL;
 		#endif // JSON_PATCH
-	#if PANGO_PATCH
-	inputw = items ? TEXTWM(items[imax].text) : 0;
-	#else
-	inputw = items ? TEXTW(items[imax].text) : 0;
-	#endif // PANGO_PATCH
 	#if JSON_PATCH
 	lines = MIN(lines, items_ln);
 	#else
@@ -1321,6 +1511,11 @@ setup(void)
 {
 	int x, y, i, j;
 	unsigned int du;
+	#if RELATIVE_INPUT_WIDTH_PATCH
+	unsigned int tmp, minstrlen = 0, curstrlen = 0;
+	int numwidthchecks = 100;
+	struct item *item;
+	#endif // RELATIVE_INPUT_WIDTH_PATCH
 	XSetWindowAttributes swa;
 	XIM xim;
 	Window w, dw, *dws;
@@ -1462,7 +1657,22 @@ setup(void)
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 	#endif // PANGO_PATCH
 	#endif // CENTER_PATCH
-	inputw = MIN(inputw, mw/3);
+	#if RELATIVE_INPUT_WIDTH_PATCH
+	for (item = items; !lines && item && item->text; ++item) {
+		curstrlen = strlen(item->text);
+		if (numwidthchecks || minstrlen < curstrlen) {
+			numwidthchecks = MAX(numwidthchecks - 1, 0);
+			minstrlen = MAX(minstrlen, curstrlen);
+			if ((tmp = textw_clamp(item->text, mw/3)) > inputw) {
+				inputw = tmp;
+				if (tmp == mw/3)
+					break;
+			}
+		}
+	}
+	#else
+	inputw = mw / 3; /* input width: ~33.33% of monitor width */
+	#endif // RELATIVE_INPUT_WIDTH_PATCH
 	match();
 
 	/* create menu window */
@@ -1478,26 +1688,32 @@ setup(void)
 	swa.background_pixel = scheme[SchemeNorm][ColBg].pixel;
 	#endif // ALPHA_PATCH
 	swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask
-	#if MOUSE_SUPPORT_PATCH
-	| ButtonPressMask
-	#endif // MOUSE_SUPPORT_PATCH
+		#if MOUSE_SUPPORT_PATCH
+		| ButtonPressMask
+		#endif // MOUSE_SUPPORT_PATCH
 	;
-	#if BORDER_PATCH
-	win = XCreateWindow(dpy, parentwin, x, y, mw, mh, border_width,
-	#else
-	win = XCreateWindow(dpy, parentwin, x, y, mw, mh, 0,
-	#endif // BORDER_PATCH
-						#if ALPHA_PATCH
-	                    depth, InputOutput, visual,
-	                    CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWColormap|CWEventMask, &swa
-						#else
-	                    CopyFromParent, CopyFromParent, CopyFromParent,
-	                    CWOverrideRedirect | CWBackPixel | CWEventMask, &swa
-						#endif // ALPHA_PATCH
+	win = XCreateWindow(
+		dpy, parentwin,
+		#if BARPADDING_PATCH && BORDER_PATCH
+		x + sp, y + vp - (topbar ? 0 : border_width * 2), mw - 2 * sp - border_width * 2, mh, border_width,
+		#elif BARPADDING_PATCH
+		x + sp, y + vp, mw - 2 * sp, mh, 0,
+		#elif BORDER_PATCH
+		x, y - (topbar ? 0 : border_width * 2), mw - border_width * 2, mh, border_width,
+		#else
+		x, y, mw, mh, 0,
+		#endif // BORDER_PATCH | BARPADDING_PATCH
+		#if ALPHA_PATCH
+		depth, InputOutput, visual,
+		CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWColormap|CWEventMask, &swa
+		#else
+		CopyFromParent, CopyFromParent, CopyFromParent,
+		CWOverrideRedirect | CWBackPixel | CWEventMask, &swa
+		#endif // ALPHA_PATCH
 	);
 	#if BORDER_PATCH
 	if (border_width)
-		XSetWindowBorder(dpy, win, scheme[SchemeSel][ColBg].pixel);
+		XSetWindowBorder(dpy, win, scheme[SchemeBorder][ColBg].pixel);
 	#endif // BORDER_PATCH
 	XSetClassHint(dpy, win, &ch);
 	#if WMTYPE_PATCH
@@ -1638,6 +1854,28 @@ main(int argc, char *argv[])
 	int fast = 0;
 	#endif // NON_BLOCKING_STDIN_PATCH
 
+	#if XRESOURCES_PATCH
+	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
+		fputs("warning: no locale support\n", stderr);
+	if (!(dpy = XOpenDisplay(NULL)))
+		die("cannot open display");
+	screen = DefaultScreen(dpy);
+	root = RootWindow(dpy, screen);
+	if (!embed || !(parentwin = strtol(embed, NULL, 0)))
+		parentwin = root;
+	if (!XGetWindowAttributes(dpy, parentwin, &wa))
+		die("could not get embedding window attributes: 0x%lx",
+		    parentwin);
+
+	#if ALPHA_PATCH
+	xinitvisual();
+	drw = drw_create(dpy, screen, root, wa.width, wa.height, visual, depth, cmap);
+	#else
+	drw = drw_create(dpy, screen, root, wa.width, wa.height);
+	#endif // ALPHA_PATCH
+	readxresources();
+	#endif // XRESOURCES_PATCH
+
 	for (i = 1; i < argc; i++)
 		/* these options take no arguments */
 		if (!strcmp(argv[i], "-v")) {      /* prints version information */
@@ -1737,8 +1975,8 @@ main(int argc, char *argv[])
 		else if (!strcmp(argv[i], "-m"))
 			mon = atoi(argv[++i]);
 		#if ALPHA_PATCH
-		else if (!strcmp(argv[i], "-o"))  /* opacity */
-			opacity = atof(argv[++i]);
+		else if (!strcmp(argv[i], "-o"))  /* opacity, pass -o 0 to disable alpha */
+			opacity = atoi(argv[++i]);
 		#endif // ALPHA_PATCH
 		else if (!strcmp(argv[i], "-p"))   /* adds prompt to left of input field */
 			prompt = argv[++i];
@@ -1751,7 +1989,7 @@ main(int argc, char *argv[])
 		#if LINE_HEIGHT_PATCH
 		else if(!strcmp(argv[i], "-h")) { /* minimum height of one menu line */
 			lineheight = atoi(argv[++i]);
-			lineheight = MAX(lineheight,8); /* reasonable default in case of value too small/negative */
+			lineheight = MAX(lineheight, min_lineheight); /* reasonable default in case of value too small/negative */
 		}
 		#endif // LINE_HEIGHT_PATCH
 		else if (!strcmp(argv[i], "-nb"))  /* normal background color */
@@ -1803,6 +2041,15 @@ main(int argc, char *argv[])
 		else
 			usage();
 
+	#if XRESOURCES_PATCH
+	#if PANGO_PATCH
+	if (!drw_font_create(drw, font))
+		die("no fonts could be loaded.");
+	#else
+	if (!drw_fontset_create(drw, (const char**)fonts, LENGTH(fonts)))
+		die("no fonts could be loaded.");
+	#endif // PANGO_PATCH
+	#else // !XRESOURCES_PATCH
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 		fputs("warning: no locale support\n", stderr);
 	if (!(dpy = XOpenDisplay(NULL)))
@@ -1821,27 +2068,35 @@ main(int argc, char *argv[])
 	#else
 	drw = drw_create(dpy, screen, root, wa.width, wa.height);
 	#endif // ALPHA_PATCH
-	#if XRESOURCES_PATCH
-	readxresources();
+
 	#if PANGO_PATCH
-	if (!drw_font_create(drw, font))
-		die("no fonts could be loaded.");
-	#else
-	if (!drw_fontset_create(drw, (const char**)fonts, LENGTH(fonts)))
-		die("no fonts could be loaded.");
-	#endif // PANGO_PATCH
-	#elif PANGO_PATCH
 	if (!drw_font_create(drw, font))
 		die("no fonts could be loaded.");
 	#else
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
-	#endif // XRESOURCES_PATCH | PANGO_PATCH
+	#endif // PANGO_PATCH
+	#endif // XRESOURCES_PATCH
+
 	#if PANGO_PATCH
 	lrpad = drw->font->h;
 	#else
 	lrpad = drw->fonts->h;
 	#endif // PANGO_PATCH
+
+	#if BARPADDING_PATCH
+	sp = sidepad;
+	vp = (topbar ? vertpad : - vertpad);
+	#endif // BARPADDING_PATCH
+
+	#if LINE_HEIGHT_PATCH
+	if (lineheight == -1)
+		#if PANGO_PATCH
+		lineheight = drw->font->h * 2.5;
+		#else
+		lineheight = drw->fonts->h * 2.5;
+		#endif // PANGO_PATCH
+	#endif // LINE_HEIGHT_PATCH
 
 #ifdef __OpenBSD__
 	if (pledge("stdio rpath", NULL) == -1)

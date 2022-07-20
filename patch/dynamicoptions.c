@@ -33,7 +33,17 @@ readstream(FILE* stream)
 			*p = '\0';
 		if (!(items[i].text = strdup(buf)))
 			die("cannot strdup %u bytes:", strlen(buf) + 1);
+		#if TSV_PATCH
+		if ((p = strchr(buf, '\t')))
+			*p = '\0';
+		if (!(items[i].stext = strdup(buf)))
+			die("cannot strdup %u bytes:", strlen(buf) + 1);
+		#endif // TSV_PATCH
+		#if MULTI_SELECTION_PATCH
+		items[i].id = i;
+		#else
 		items[i].out = 0;
+		#endif // MULTI_SELECTION_PATCH
 		#if HIGHPRIORITY_PATCH
 		items[i].hp = arrayhas(hpitems, hplength, items[i].text);
 		#endif // HIGHPRIORITY_PATCH
@@ -47,6 +57,11 @@ readstream(FILE* stream)
 			imax = i;
 		}
 	}
+
+	/* If the command did not give any output at all, then do not clear the existing items */
+	if (!i)
+		return;
+
 	if (items)
 		items[i].text = NULL;
 	#if PANGO_PATCH
@@ -56,4 +71,8 @@ readstream(FILE* stream)
 	#endif // PANGO_PATCH
 	if (!dynamic || !*dynamic)
 		lines = MIN(lines, i);
+	else {
+		text[0] = '\0';
+		cursor = 0;
+	}
 }

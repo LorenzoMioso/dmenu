@@ -1,5 +1,5 @@
-Similar to [dwm-flexipatch](https://github.com/bakkeby/dwm-flexipatch) this dmenu 5.0 (1a13d0,
-2020-09-02) project has a different take on patching. It uses preprocessor directives to decide
+Similar to [dwm-flexipatch](https://github.com/bakkeby/dwm-flexipatch) this dmenu 5.1 (28fb3e2,
+2022-05-01) project has a different take on patching. It uses preprocessor directives to decide
 whether or not to include a patch during build time. Essentially this means that this build, for
 better or worse, contains both the patched _and_ the original code. The aim being that you can
 select which patches to include and the build will contain that code and nothing more.
@@ -22,9 +22,17 @@ you selected.
 Refer to [https://tools.suckless.org/dmenu/](https://tools.suckless.org/dmenu/) for details on
 dmenu, how to install it and how it works.
 
+Browsing patches? There is a [map of patches](https://coggle.it/diagram/YjT2DD6jBM9dayf3) diagram which tries to organise patches into categories.
+
 ---
 
 ### Changelog:
+
+2022-06-21 - Adding barpadding patch and relative input width patch
+
+2022-03-02 - Bump to 5.1
+
+2021-05-23 - Adding support for `ctrl+v` to paste and adding emoji-highlight patch
 
 2021-05-17 - Added the restrict return, no sort, gridnav and plain-prompt (listfullwidth) patches
 
@@ -55,8 +63,12 @@ dmenu, how to install it and how it works.
 
 ### Patches included:
 
-   - [alpha](https://github.com/bakkeby/patches/blob/master/dmenu/dmenu-alpha-4.9_20190303_190303.diff)
+   - [alpha](https://github.com/bakkeby/patches/blob/master/dmenu/dmenu-alpha-5.0_20210725_523aa08.diff)
       - adds transparency for the dmenu window
+
+   - [barpadding](https://github.com/bakkeby/patches/wiki/barpadding)
+      - adds padding for dmenu in similar fashion to the [barpadding](https://dwm.suckless.org/patches/barpadding/)
+        patch for dwm
 
    - [border](http://tools.suckless.org/dmenu/patches/border/)
       - adds a border around the dmenu window
@@ -78,6 +90,9 @@ dmenu, how to install it and how it works.
       - adds a flag (`-dy`) which makes dmenu run the command given to it whenever input is changed
         with the current input as the last argument and update the option list according to the
         output of that command
+
+   - [emoji-highlight](https://tools.suckless.org/dmenu/patches/emoji-highlight/)
+      - this patch will allow for emojis on the left side with a colored background when selected
 
    - [fuzzyhighlight](https://tools.suckless.org/dmenu/patches/fuzzyhighlight/)
       - intended to be combined with the fuzzymatch patch, this makes it so that fuzzy matches are
@@ -193,6 +208,14 @@ dmenu, how to install it and how it works.
    - [rejectnomatch](https://tools.suckless.org/dmenu/patches/reject-no-match/)
       - adds a new flag to dmenu with which text input will be rejected if it would result in no
         matching item
+
+   - relative_input_width
+      - prior to commit [e1e1de7](https://git.suckless.org/dmenu/commit/e1e1de7b3b8399cba90ddca9613f837b2dbef7b9.html)
+        the input width was calculated based on the input options
+      - this feature was removed in favour of hardcoding the input width to always take up 1/3rd of
+        the available space
+      - this patch adds that feature back in with some bespoke performance optimisations at the cost
+        of accuracy and correctness
 
    - [restrict-return](https://tools.suckless.org/dmenu/patches/restrict-return/)
       - adds a `-1` option which disables Shift-Return and Ctrl-Return
